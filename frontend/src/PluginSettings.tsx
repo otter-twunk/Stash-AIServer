@@ -767,17 +767,13 @@ const PluginSettings = () => {
 
     for (const def of SELF_SETTING_DEFS) {
       const raw = working[def.key];
-      const needsDefault =
-        raw === undefined ||
-        raw === null ||
-        (def.key === 'backend_base_url' && normalizeBaseValue(raw) === '');
+      const needsDefault = raw === undefined || raw === null;
       if (!needsDefault) continue;
 
       const baseDefault = def.type === 'boolean' ? !!def.default : def.default;
       if (def.key === 'backend_base_url') {
-        const normalized = normalizeBaseValue(baseDefault) || DEFAULT_BACKEND_BASE_URL;
-        working[def.key] = normalized;
-        pending.push({ key: def.key, value: normalized });
+        working[def.key] = '';
+        continue;
       } else {
         working[def.key] = baseDefault;
         pending.push({ key: def.key, value: baseDefault });

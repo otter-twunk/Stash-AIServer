@@ -29,6 +29,21 @@ function getOrigin(): string {
   return '';
 }
 
+function inferOrbStackBackendBase(): string {
+  try {
+    if (typeof location === 'undefined') return '';
+    const { protocol, hostname } = location;
+    if (!hostname || !hostname.endsWith('.orb.local')) return '';
+    const labels = hostname.split('.');
+    if (labels.length < 4) return '';
+    labels[0] = 'ai-overhaul-backend';
+    const inferredHost = labels.join('.');
+    const inferredProtocol = protocol === 'https:' ? 'https:' : 'http:';
+    return `${inferredProtocol}//${inferredHost}`;
+  } catch {}
+  return '';
+}
+
 function normalizeBase(raw: unknown): string | null {
   if (typeof raw !== 'string') return null;
   const trimmed = raw.trim();
@@ -188,7 +203,7 @@ export default function defaultBackendBase(): string {
     const stored = sessionStorage.getItem(STORAGE_KEY);
     if (stored && typeof stored === 'string') {
       const normalized = normalizeBase(stored);
-      if (normalized !== null && normalized !== undefined) {
+      if (normalized) {
         return normalized;
       }
     }
@@ -196,10 +211,14 @@ export default function defaultBackendBase(): string {
 
   if (typeof (window as any).AI_BACKEND_URL === 'string') {
     const explicit = normalizeBase((window as any).AI_BACKEND_URL);
-    if (explicit !== null && explicit !== undefined) {
+    if (explicit) {
       return explicit;
     }
-    return '';
+  }
+
+  const inferredOrbStackBase = inferOrbStackBackendBase();
+  if (inferredOrbStackBase) {
+    return inferredOrbStackBase;
   }
 
   return DEFAULT_BACKEND_BASE;
