@@ -1,8 +1,10 @@
 """Tests for database migrations."""
 
+from pathlib import Path
+
 import pytest
 import pytest_asyncio
-from pathlib import Path
+import sqlalchemy as sa
 
 from tests.migration_testing import (
     MigrationTestRunner,
@@ -11,6 +13,44 @@ from tests.migration_testing import (
     validate_migration_files
 )
 from tests.config import test_config
+from stash_ai_server.models.plugin import PluginCatalog, PluginSetting
+
+
+def test_plugin_catalog_uniqueness_contract_matches_models_and_migration():
+    """Keep plugin uniqueness constraints aligned between ORM models and Alembic."""
+
+    expected_constraints = {
+        "uq_plugin_catalog_source_name": ("source_id", "plugin_name"),
+        "uq_plugin_settings_name_key": ("plugin_name", "key"),
+    }
+
+    def unique_constraints_for(model):
+        return {
+            constraint.name: tuple(column.name for column in constraint.columns)
+            for constraint in model.__table__.constraints
+            if isinstance(constraint, sa.UniqueConstraint)
+        }
+
+    model_constraints = {}
+    model_constraints.update(unique_constraints_for(PluginCatalog))
+    model_constraints.update(unique_constraints_for(PluginSetting))
+
+    for constraint_name, columns in expected_constraints.items():
+        assert model_constraints.get(constraint_name) == columns
+
+    migration_path = (
+        Path(__file__).resolve().parent.parent
+        / "stash_ai_server"
+        / "alembic"
+        / "versions"
+        / "0005_plugin_catalog_unique_constraints.py"
+    )
+    migration_text = migration_path.read_text()
+
+    assert "uq_plugin_catalog_source_name" in migration_text
+    assert "['source_id', 'plugin_name']" in migration_text
+    assert "uq_plugin_settings_name_key" in migration_text
+    assert "['plugin_name', 'key']" in migration_text
 
 
 @pytest.mark.database
