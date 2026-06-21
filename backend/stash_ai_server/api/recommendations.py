@@ -142,7 +142,7 @@ async def list_recommenders(context: RecContext = Query(...), db: Session = Depe
             saved_cfg = pref.config or {}
     return RecommenderListResponse(
         context=context,
-        recommenders=[d.dict() for d in defs],
+        recommenders=[d.model_dump() for d in defs],
         defaultRecommenderId=default_id,
         savedRecommenderId=saved_id,
         savedConfig=saved_cfg,
@@ -193,8 +193,8 @@ async def query_recommendations(payload: RecommendationQueryBody = Body(...)):
     validated: list[dict] = []
     for idx, sc in enumerate(raw_scenes):  # type: ignore
         try:
-            model = SceneModel.parse_obj(sc)
-            validated.append(model.dict())
+            model = SceneModel.model_validate(sc)
+            validated.append(model.model_dump())
         except ValidationError as ve:
             warnings.append(f'scene[{idx}] validation failed')
 

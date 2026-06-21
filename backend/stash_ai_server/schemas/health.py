@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Dict, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class HealthStatus(str, Enum):
@@ -45,5 +45,4 @@ class SystemHealthSnapshot(BaseModel):
         description="Full payload returned by the version endpoint for feature gating",
     )
 
-    class Config:
-        use_enum_values = True
+    model_config = ConfigDict(use_enum_values=True)

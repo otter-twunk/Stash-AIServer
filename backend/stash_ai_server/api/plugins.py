@@ -1,6 +1,6 @@
 from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException, Body
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from typing import List, Optional, Any, Dict
 import datetime
 from sqlalchemy.orm import Session
@@ -72,8 +72,7 @@ class PluginMetaModel(BaseModel):
     last_error: Optional[str]
     human_name: Optional[str] = None
     server_link: Optional[str] = None
-    class Config:
-        orm_mode = True
+    model_config = ConfigDict(from_attributes=True)
 
 class PluginSourceCreate(BaseModel):
     name: str
@@ -84,8 +83,7 @@ class PluginSourceModel(PluginSourceCreate):
     id: int
     last_refreshed_at: Optional[datetime.datetime] = None
     last_error: Optional[str] = None
-    class Config:
-        orm_mode = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 

@@ -1,7 +1,7 @@
 from __future__ import annotations
 from typing import List, Dict, Any, Callable, Awaitable, Optional
 from enum import Enum
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 class RecContext(str, Enum):
     global_feed = "global_feed"
@@ -60,7 +60,8 @@ class SceneModel(BaseModel):
     score: Optional[float] = Field(None, description="Optional relevance score (0-1 or model-dependent)")
     debug_meta: Optional[Dict[str, Any]] = None
 
-    @validator('paths', pre=True, always=True)
+    @field_validator('paths', mode='before')
+    @classmethod
     def ensure_paths(cls, v):  # type: ignore
         if not isinstance(v, dict):
             return {'screenshot': None, 'preview': None}
@@ -68,8 +69,7 @@ class SceneModel(BaseModel):
         v.setdefault('preview', None)
         return v
 
-    class Config:
-        extra = 'allow'
+    model_config = ConfigDict(extra='allow')
 
 RecommendationResult = List[Dict[str, Any]]
 

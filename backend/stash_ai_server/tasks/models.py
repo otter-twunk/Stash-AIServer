@@ -4,7 +4,7 @@ import time
 import uuid
 from dataclasses import dataclass
 from typing import Any, Optional, List, Dict
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from stash_ai_server.actions.models import ContextInput
 
 #TODO: Add more priority options
@@ -41,8 +41,7 @@ class TaskRecord(BaseModel):
     dedupe_ctx_key: str | None = None
     dedupe_params_key: str | None = None
 
-    class Config:
-        arbitrary_types_allowed = True
+    model_config = ConfigDict(arbitrary_types_allowed=True)
 
     def summary(self) -> dict:
         return {
