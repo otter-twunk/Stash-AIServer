@@ -1166,7 +1166,7 @@ const PluginSettings = () => {
         headers: { 'content-type': 'application/json' },
         credentials: 'same-origin',
         body: JSON.stringify({
-          query: 'mutation { runPluginTask(plugin_id: "pnpserve-control", task_name: "Restart NSFW Server") }',
+          query: 'mutation { runPluginTask(plugin_id: "pnpserve_control", task_name: "Restart NSFW Server") }',
         }),
       });
       // Poll /v3/current_ai_models/ until it matches the active config (max 2 min)
