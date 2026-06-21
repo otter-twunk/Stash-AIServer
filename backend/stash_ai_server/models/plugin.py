@@ -1,7 +1,7 @@
 from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Any
-from sqlalchemy import Integer, String, DateTime, Text, Boolean, JSON, ForeignKey
+from sqlalchemy import Integer, String, DateTime, Text, Boolean, JSON, ForeignKey, UniqueConstraint
 from sqlalchemy.orm import relationship
 from sqlalchemy.orm import Mapped, mapped_column
 from stash_ai_server.db.session import Base
@@ -36,6 +36,7 @@ class PluginSource(Base):
 
 class PluginCatalog(Base):
     __tablename__ = 'plugin_catalog'
+    __table_args__ = (UniqueConstraint('source_id', 'plugin_name', name='uq_plugin_catalog_source_name'),)
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     source_id: Mapped[int] = mapped_column(Integer, ForeignKey('plugin_sources.id', ondelete='CASCADE'), nullable=False, index=True)
     plugin_name: Mapped[str] = mapped_column(String(100), nullable=False, index=True)
@@ -51,6 +52,7 @@ class PluginCatalog(Base):
 
 class PluginSetting(Base):
     __tablename__ = 'plugin_settings'
+    __table_args__ = (UniqueConstraint('plugin_name', 'key', name='uq_plugin_settings_name_key'),)
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     plugin_name: Mapped[str] = mapped_column(String(100), nullable=False, index=True)
     key: Mapped[str] = mapped_column(String(100), nullable=False)

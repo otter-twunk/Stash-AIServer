@@ -160,7 +160,9 @@ def _load_catalog_row_for_plugin(db: Session, plugin_name: str, preferred_source
         ).scalar_one_or_none()
         if row:
             return row
-    return db.execute(select(PluginCatalog).where(PluginCatalog.plugin_name == plugin_name)).scalar_one_or_none()
+    return db.execute(
+        select(PluginCatalog).where(PluginCatalog.plugin_name == plugin_name).order_by(PluginCatalog.id).limit(1)
+    ).scalars().first()
 
 
 def _catalog_dependencies(row: PluginCatalog) -> List[str]:
@@ -264,7 +266,9 @@ def _ensure_catalog_entry_from_manifest(
     """
 
     # If a catalog row already exists (remote or local), leave it intact.
-    existing = db.execute(select(PluginCatalog).where(PluginCatalog.plugin_name == manifest.name)).scalar_one_or_none()
+    existing = db.execute(
+        select(PluginCatalog).where(PluginCatalog.plugin_name == manifest.name).order_by(PluginCatalog.id).limit(1)
+    ).scalars().first()
     if existing:
         return
 
