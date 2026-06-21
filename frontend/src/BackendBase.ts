@@ -4,7 +4,7 @@
 
 const PLUGIN_NAME = 'AIOverhaul';
 // Local default to keep the UI functional before plugin config loads.
-const DEFAULT_BACKEND_BASE = 'http://localhost:4153';
+const DEFAULT_BACKEND_BASE = 'http://localhost:14153';
 const STORAGE_KEY = 'ai_backend_base_url';
 const CONFIG_QUERY = `query AIOverhaulPluginConfig($ids: [ID!]) {
   configuration {

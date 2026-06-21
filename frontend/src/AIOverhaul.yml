@@ -23,22 +23,22 @@ ui:
     - css/SimilarScenes.css
   csp:
     connect-src:
-      - http://localhost:4153
-      - ws://localhost:4153
-      - https://localhost:4153
-      - http://127.0.0.1:4153
-      - ws://127.0.0.1:4153
-      - https://127.0.0.1:4153
-      - http://ai-overhaul-backend.pnpserve.orb.local:4153
+      - http://localhost:14153
+      - ws://localhost:14153
+      - https://localhost:14153
+      - http://127.0.0.1:14153
+      - ws://127.0.0.1:14153
+      - https://127.0.0.1:14153
+      - http://ai-overhaul-backend.pnpserve.orb.local:14153
       - https://ai-overhaul-backend.pnpserve.orb.local
-      - ws://ai-overhaul-backend.pnpserve.orb.local:4153
+      - ws://ai-overhaul-backend.pnpserve.orb.local:14153
       - wss://ai-overhaul-backend.pnpserve.orb.local
       # Add additional urls here for the stash-ai-server if your browser is not on the same host
     script-src:
       - 'self'
-      - http://localhost:4153
-      - https://localhost:4153
-      - http://ai-overhaul-backend.pnpserve.orb.local:4153
+      - http://localhost:14153
+      - https://localhost:14153
+      - http://ai-overhaul-backend.pnpserve.orb.local:14153
       - https://ai-overhaul-backend.pnpserve.orb.local
       - http://www.gstatic.com
       - https://www.gstatic.com

@@ -27,7 +27,7 @@ const LEGACY_BACKEND_URL = 'AI_BACKEND_URL_OVERRIDE';
 const LEGACY_INTERACTIONS = 'AI_INTERACTIONS_ENABLED';
 const THIS_PLUGIN_NAME = 'AIOverhaul';
 // Fallback base used when no override has been persisted yet.
-const DEFAULT_BACKEND_BASE_URL = 'http://localhost:4153';
+const DEFAULT_BACKEND_BASE_URL = 'http://localhost:14153';
 
 const DEFAULT_MIN_BACKEND_VERSION = '>=0.8.0';
 const DEV_VERSION_PATTERN = /(dev|local|snapshot|dirty)/i;
@@ -172,6 +172,8 @@ type SelfSettingDefinition = {
   options?: any;
 };
 
+const DEFAULT_NSFW_SERVER_URL = 'http://localhost:18000';
+
 const SELF_SETTING_DEFS: SelfSettingDefinition[] = [
   {
     key: 'backend_base_url',
@@ -193,6 +195,13 @@ const SELF_SETTING_DEFS: SelfSettingDefinition[] = [
     type: 'string',
     default: '',
     description: 'Secret sent with every AI Overhaul request when the backend shared key is enabled.',
+  },
+  {
+    key: 'nsfw_server_url',
+    label: 'NSFW Server URL',
+    type: 'string',
+    default: DEFAULT_NSFW_SERVER_URL,
+    description: 'Base URL of the NSFW AI Model Server. Change only if running on a non-standard port.',
   },
 ];
 
@@ -479,6 +488,25 @@ const PluginSettings = () => {
   const [sharedKeySaving, setSharedKeySaving] = React.useState(false);
   const [sharedKeyReveal, setSharedKeyReveal] = React.useState(false);
   const selfConfigRef = React.useRef({} as any);
+
+  // NSFW AI Server state
+  const [nsfwServerUrl, setNsfwServerUrl] = React.useState(DEFAULT_NSFW_SERVER_URL);
+  const [nsfwServerUrlDraft, setNsfwServerUrlDraft] = React.useState(DEFAULT_NSFW_SERVER_URL);
+  const [nsfwServerUrlSaving, setNsfwServerUrlSaving] = React.useState(false);
+  const nsfwServerUrlRef = React.useRef(DEFAULT_NSFW_SERVER_URL);
+  React.useEffect(() => { nsfwServerUrlRef.current = nsfwServerUrl; }, [nsfwServerUrl]);
+
+  // NSFW model management state
+  const [nsfwOpen, setNsfwOpen] = React.useState(false);
+  const [nsfwModels, setNsfwModels] = React.useState([] as any[]);
+  const [nsfwActive, setNsfwActive] = React.useState([] as string[]);
+  const [nsfwCurrent, setNsfwCurrent] = React.useState([] as any[]);
+  const [nsfwLoading, setNsfwLoading] = React.useState(false);
+  const [nsfwError, setNsfwError] = React.useState(null as string | null);
+  const [nsfwRestartPending, setNsfwRestartPending] = React.useState(false);
+  const [nsfwRestartLoading, setNsfwRestartLoading] = React.useState(false);
+  const nsfwActiveRef = React.useRef([] as string[]);
+  React.useEffect(() => { nsfwActiveRef.current = nsfwActive; }, [nsfwActive]);
 
   const showPluginActionMessage = React.useCallback((message: string, level: 'error' | 'info' | 'success' = 'error') => {
     if (!message) return;
@@ -929,6 +957,10 @@ const PluginSettings = () => {
     const remoteInteractions = coerceBoolean(lookup('capture_events'), true);
     const remoteSharedRaw = lookup('shared_api_key');
     const remoteSharedKey = typeof remoteSharedRaw === 'string' ? remoteSharedRaw.trim() : '';
+    const remoteNsfwRaw = lookup('nsfw_server_url');
+    const remoteNsfwUrl = (typeof remoteNsfwRaw === 'string' && remoteNsfwRaw.trim())
+      ? remoteNsfwRaw.trim()
+      : DEFAULT_NSFW_SERVER_URL;
 
     try {
       const helper = (window as any).AIDefaultBackendBase;
@@ -943,6 +975,7 @@ const PluginSettings = () => {
     const editingDraft = normalizeBaseValue(backendDraft) !== backendBaseRef.current;
     const prevShared = sharedKeyRef.current;
     const editingSharedKey = sharedKeyDraft !== prevShared;
+    const editingNsfwUrl = nsfwServerUrlDraft !== nsfwServerUrlRef.current;
     sharedKeyRef.current = remoteSharedKey;
     if (!selfSettingsInitialized) {
       if (remoteBase !== backendBaseRef.current) {
@@ -953,6 +986,8 @@ const PluginSettings = () => {
         setInteractionsEnabled(remoteInteractions);
       }
       setSharedKeyDraft(remoteSharedKey);
+      setNsfwServerUrl(remoteNsfwUrl);
+      setNsfwServerUrlDraft(remoteNsfwUrl);
       setSelfSettingsInitialized(true);
     } else {
       if (!editingDraft) {
@@ -970,6 +1005,10 @@ const PluginSettings = () => {
         if (remoteSharedKey !== sharedKeyDraft) {
           setSharedKeyDraft(remoteSharedKey);
         }
+      }
+      if (!editingNsfwUrl && remoteNsfwUrl !== nsfwServerUrlRef.current) {
+        setNsfwServerUrl(remoteNsfwUrl);
+        setNsfwServerUrlDraft(remoteNsfwUrl);
       }
     }
 
@@ -1050,6 +1089,119 @@ const PluginSettings = () => {
       }
     } catch {}
   }, [interactionsEnabled]);
+
+  const saveNsfwServerUrl = React.useCallback(async () => {
+    const clean = (nsfwServerUrlDraft || '').trim() || DEFAULT_NSFW_SERVER_URL;
+    const prev = nsfwServerUrlRef.current;
+    if (clean === prev && selfSettingsInitialized) return;
+    setNsfwServerUrlSaving(true);
+    setNsfwServerUrl(clean);
+    try {
+      const ok = await savePluginSetting(THIS_PLUGIN_NAME, 'nsfw_server_url', clean);
+      if (!ok) {
+        setNsfwServerUrl(prev);
+        setNsfwServerUrlDraft(prev);
+      }
+    } finally {
+      setNsfwServerUrlSaving(false);
+    }
+  }, [nsfwServerUrlDraft, savePluginSetting, selfSettingsInitialized]);
+
+  const fetchNsfwData = React.useCallback(async () => {
+    const url = nsfwServerUrlRef.current;
+    setNsfwLoading(true);
+    setNsfwError(null);
+    try {
+      const [available, active, current] = await Promise.all([
+        fetch(`${url}/v3/available_models/`).then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); }),
+        fetch(`${url}/v3/active_models/`).then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); }),
+        fetch(`${url}/v3/current_ai_models/`).then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); }),
+      ]);
+      setNsfwModels(Array.isArray(available) ? available.sort((a: any, b: any) => {
+        const catA = (a.model_category || [])[0] || '';
+        const catB = (b.model_category || [])[0] || '';
+        if (catA !== catB) return catA.localeCompare(catB);
+        return (a.model_identifier || 0) - (b.model_identifier || 0);
+      }) : []);
+      const activeNames = Array.isArray(active?.active_ai_models) ? active.active_ai_models : [];
+      setNsfwActive(activeNames);
+      const currentArr = Array.isArray(current) ? current : [];
+      setNsfwCurrent(currentArr);
+      const currentNames = currentArr.map((m: any) => m.name || m.yaml_file_name || '').filter(Boolean).sort();
+      const activeNamesSorted = [...activeNames].sort();
+      setNsfwRestartPending(JSON.stringify(currentNames) !== JSON.stringify(activeNamesSorted));
+    } catch (e: any) {
+      setNsfwError(e.message || 'Failed to reach NSFW server');
+    } finally {
+      setNsfwLoading(false);
+    }
+  }, []);
+
+  const toggleNsfwModel = React.useCallback(async (modelName: string, currentlyActive: boolean) => {
+    const nextActive = currentlyActive
+      ? nsfwActiveRef.current.filter((n: string) => n !== modelName)
+      : [...nsfwActiveRef.current, modelName];
+    const url = nsfwServerUrlRef.current;
+    try {
+      const resp = await fetch(`${url}/v3/active_models/`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ active_ai_models: nextActive }),
+      });
+      const body = await resp.json().catch(() => ({}));
+      if (!resp.ok) throw new Error(body.detail || `HTTP ${resp.status}`);
+      setNsfwActive(nextActive);
+      setNsfwRestartPending(true);
+    } catch (e: any) {
+      setNsfwError(e.message);
+    }
+  }, []);
+
+  const restartNsfwServer = React.useCallback(async () => {
+    setNsfwRestartLoading(true);
+    setNsfwError(null);
+    try {
+      await fetch('/graphql', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify({
+          query: 'mutation { runPluginTask(plugin_id: "pnpserve-control", task_name: "Restart NSFW Server") }',
+        }),
+      });
+      // Poll /v3/current_ai_models/ until it matches the active config (max 2 min)
+      const poll = async () => {
+        const url = nsfwServerUrlRef.current;
+        for (let i = 0; i < 24; i++) {
+          await new Promise(r => setTimeout(r, 5000));
+          try {
+            const resp = await fetch(`${url}/v3/current_ai_models/`);
+            if (!resp.ok) continue;
+            const current = await resp.json();
+            const currentNames = (Array.isArray(current) ? current : [])
+              .map((m: any) => m.name || m.yaml_file_name || '').filter(Boolean).sort();
+            const activeNames = [...nsfwActiveRef.current].sort();
+            if (JSON.stringify(currentNames) === JSON.stringify(activeNames)) {
+              setNsfwCurrent(Array.isArray(current) ? current : []);
+              setNsfwRestartPending(false);
+              break;
+            }
+          } catch {}
+        }
+        setNsfwRestartLoading(false);
+      };
+      poll();
+    } catch (e: any) {
+      setNsfwError(e.message);
+      setNsfwRestartLoading(false);
+    }
+  }, []);
+
+  React.useEffect(() => {
+    if (nsfwOpen && nsfwModels.length === 0 && !nsfwLoading) {
+      void fetchNsfwData();
+    }
+  }, [nsfwOpen]);
 
   const saveBackendBase = React.useCallback(async () => {
     const clean = normalizeBaseValue(backendDraft);
@@ -2693,6 +2845,122 @@ const PluginSettings = () => {
         )}
       </div>
       <div style={sectionStyle}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer' }} onClick={() => setNsfwOpen((o: boolean) => !o)}>
+          <h3 style={{ ...headingStyle, margin: 0 }}>NSFW AI Model Server {nsfwOpen ? '▾' : '▸'}</h3>
+          {nsfwOpen && (
+            <button style={smallBtn} onClick={(e: any) => { e.stopPropagation(); void fetchNsfwData(); }} disabled={nsfwLoading}>
+              {nsfwLoading ? 'Loading…' : 'Refresh'}
+            </button>
+          )}
+        </div>
+        {nsfwOpen && (
+          <div style={{ marginTop: 12 }}>
+            <label style={{ fontSize: 12, display: 'flex', flexDirection: 'column', gap: 4, marginBottom: 12, maxWidth: 500 }}>
+              NSFW Server URL
+              <div style={{ display: 'flex', gap: 4 }}>
+                <input
+                  value={nsfwServerUrlDraft}
+                  onChange={(e: any) => setNsfwServerUrlDraft(e.target.value)}
+                  style={{ flex: 1, padding: 6, background: '#111', color: '#eee', border: '1px solid #333' }}
+                  disabled={nsfwServerUrlSaving}
+                  placeholder={DEFAULT_NSFW_SERVER_URL}
+                />
+                <button
+                  style={smallBtn}
+                  onClick={() => { void saveNsfwServerUrl(); void fetchNsfwData(); }}
+                  disabled={nsfwServerUrlSaving || nsfwServerUrlDraft === nsfwServerUrl}
+                >{nsfwServerUrlSaving ? 'Saving…' : 'Save'}</button>
+              </div>
+              <span style={{ fontSize: 10, opacity: 0.7 }}>Stored in Stash plugin config. Default: {DEFAULT_NSFW_SERVER_URL}</span>
+            </label>
+
+            {nsfwRestartPending && (
+              <div style={{ background: '#332800', border: '1px solid #8a6800', color: '#ffd700', padding: '10px 12px', borderRadius: 6, marginBottom: 12, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
+                <span style={{ fontSize: 13 }}>Model configuration changed — restart NSFW server to apply</span>
+                <button
+                  style={{ ...smallBtn, background: '#8a6800', color: '#fff', padding: '4px 10px' }}
+                  onClick={() => { void restartNsfwServer(); }}
+                  disabled={nsfwRestartLoading}
+                >{nsfwRestartLoading ? 'Restarting…' : 'Restart Now'}</button>
+              </div>
+            )}
+
+            {nsfwError && (
+              <div style={{ color: '#f88', fontSize: 12, marginBottom: 8 }}>
+                {nsfwError} <button style={smallBtn} onClick={() => setNsfwError(null)}>×</button>
+              </div>
+            )}
+
+            {nsfwModels.length > 0 ? (
+              <table style={{ ...tableStyle, fontSize: 12 }}>
+                <thead>
+                  <tr>
+                    <th style={{ ...thtd, width: '1%' }}>Active</th>
+                    <th style={thtd}>Model</th>
+                    <th style={thtd}>Category</th>
+                    <th style={thtd}>Size</th>
+                    <th style={thtd}>Ver</th>
+                    <th style={thtd}>Info</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {nsfwModels.map((m: any) => {
+                    const isActive = nsfwActive.includes(m.yaml_file_name);
+                    const otherActive = nsfwActive.filter((n: string) => n !== m.yaml_file_name);
+                    const activeSizes = new Set(
+                      otherActive.map((n: string) => (nsfwModels.find((x: any) => x.yaml_file_name === n) || {}).model_image_size).filter((v: any) => v != null)
+                    );
+                    const activeCats = new Set<string>(
+                      otherActive.flatMap((n: string) => (nsfwModels.find((x: any) => x.yaml_file_name === n) || {}).model_category || [])
+                    );
+                    let reason = '';
+                    if (!isActive) {
+                      if (activeSizes.size > 0 && !activeSizes.has(m.model_image_size)) {
+                        reason = `${m.model_image_size}px ≠ active ${[...activeSizes][0]}px`;
+                      } else {
+                        const conflict = (m.model_category || []).find((c: string) => activeCats.has(c));
+                        if (conflict) reason = `category '${conflict}' taken`;
+                      }
+                    }
+                    return (
+                      <tr key={m.yaml_file_name} style={{ opacity: reason ? 0.4 : 1 }}>
+                        <td style={{ ...thtd, textAlign: 'center' }}>
+                          <input
+                            type="checkbox"
+                            checked={isActive}
+                            disabled={!!reason}
+                            title={reason || undefined}
+                            onChange={() => { void toggleNsfwModel(m.yaml_file_name, isActive); }}
+                          />
+                        </td>
+                        <td style={thtd}>{m.yaml_file_name}</td>
+                        <td style={thtd}>{(m.model_category || []).join(', ')}</td>
+                        <td style={thtd}>{m.model_image_size}px</td>
+                        <td style={thtd}>{m.model_version}</td>
+                        <td style={thtd}>
+                          {m.model_info}
+                          {reason && <span style={{ color: '#888', fontSize: 10, marginLeft: 6 }}>({reason})</span>}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            ) : nsfwLoading ? (
+              <div style={{ fontSize: 12, opacity: 0.7 }}>Loading models…</div>
+            ) : (
+              <div style={{ fontSize: 12, opacity: 0.7 }}>Click Refresh to load models from the NSFW server.</div>
+            )}
+
+            {nsfwCurrent.length > 0 && (
+              <div style={{ marginTop: 8, fontSize: 11, opacity: 0.6 }}>
+                Currently loaded: {nsfwCurrent.map((m: any) => m.name || m.yaml_file_name || JSON.stringify(m)).join(', ')}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+      <div style={sectionStyle}>
         <h3 style={headingStyle}>AI Overhaul Plugin Settings</h3>
         <div style={{display:'flex', flexDirection:'column', gap:8, maxWidth:500}}>
           <label style={{fontSize:12, display:'flex', flexDirection:'column', gap:4}}>Backend Base URL
@@ -2753,7 +3021,6 @@ const PluginSettings = () => {
             <span style={{fontSize:10, opacity:0.7}}>Stored in the plugin config and sent as the <code>x-ai-api-key</code> header (and <code>api_key</code> websocket query). This must match the backend system setting to enable the shared secret.</span>
           </label>
           <div style={{fontSize:10, opacity:0.7}}>Task dashboard: <a href="plugins/ai-tasks" style={{color:'#9cf'}}>Open</a></div>
-          <div style={{fontSize:10, opacity:0.5}}>Restart backend button not yet implemented (needs backend endpoint).</div>
         </div>
       </div>
       <div style={sectionStyle}>

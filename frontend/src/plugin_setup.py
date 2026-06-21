@@ -28,7 +28,7 @@ query Configuration($pluginIds: [ID!]) {
 """
 
 # Shared fallback backend base so setup can still sync metadata when no override exists yet.
-DEFAULT_BACKEND_BASE_URL = "http://localhost:4153"
+DEFAULT_BACKEND_BASE_URL = "http://localhost:14153"
 
 
 def _normalize_backend_base(raw: Any) -> Optional[str]:
