@@ -22,7 +22,7 @@ from alembic import op
 import sqlalchemy as sa
 
 
-revision = '0005_plugin_catalog_unique_constraints'
+revision = '0005_plugin_catalog_uq'
 down_revision = '0004_ai_tagging_perf_indexes'
 branch_labels = None
 depends_on = None
